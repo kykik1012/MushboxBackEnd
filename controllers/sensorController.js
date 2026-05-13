@@ -19,7 +19,13 @@ async function handleSensorData(message, mqttClient) {
             // 1. Simpan ke Database
             const { error } = await supabase
                 .from('sensor_history')
-                .insert([{ temp: data.temp, hum: data.hum, soil: data.soil, dist: data.dist }]);
+                .insert([{ 
+                    temp: data.temp, 
+                    hum: data.hum, 
+                    soil: data.soil, 
+                    dist: data.dist,
+                    co2: data.co2
+                }]);
             
             if (error) {
                 console.error('❌ Gagal simpan sensor ke Supabase:', error);

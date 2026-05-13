@@ -1,5 +1,6 @@
 const mqtt = require('mqtt');
 const { handleSensorData } = require('../controllers/sensorController');
+const { initScheduling } = require('../services/scheduleService');
 
 const SENSOR_TOPIC = 'mewing/sensor/data';
 let mqttClient = null;
@@ -11,9 +12,13 @@ function connect() {
         protocol: 'mqtts' // Menggunakan jalur aman SSL
     });
 
+
     mqttClient.on('connect', () => {
         console.log('✅ [MQTT] Terhubung ke Broker HiveMQ');
-        mqttClient.subscribe(SENSOR_TOPIC); // Mendengarkan data sensor
+        mqttClient.subscribe(SENSOR_TOPIC);
+        
+        // Mulai jalankan sistem penjadwalan
+        initScheduling(mqttClient); 
     });
 
     mqttClient.on('message', (topic, message) => {
