@@ -1,6 +1,5 @@
 const supabase = require('../config/supabase');
 
-// Pisahkan topik MQTT
 const TOPICS = {
     'Pompa': 'mewing/relay/pump',
     'Kipas': 'mewing/relay/fan'
@@ -8,7 +7,6 @@ const TOPICS = {
 
 async function checkAndTriggerIrrigation(sensorData, mqttClient) {
     try {
-        // 1. Ambil semua aturan
         const { data: triggers, error } = await supabase
             .from('otomasi_trigger')
             .select('*')
@@ -16,33 +14,46 @@ async function checkAndTriggerIrrigation(sensorData, mqttClient) {
 
         if (error) throw error;
 
-        // 2. Iterasi aturan
         for (const rule of triggers) {
-            let isConditionMet = false;
             const currentVal = getSensorValue(rule.sensor, sensorData);
+            const aktuatorBersih = rule.aktuator.trim();
+            const perintahBersih = rule.perintah.trim(); // Biasanya 'ON'
+            const targetTopic = TOPICS[aktuatorBersih];
+            
+            // Ambil status alat saat ini dari ESP32 (agar tidak spam)
+            const currentState = aktuatorBersih === 'Pompa' ? sensorData.pump : sensorData.fan;
 
-            if (rule.operator === '<') isConditionMet = currentVal < rule.nilai;
-            else if (rule.operator === '>') isConditionMet = currentVal > rule.nilai;
-            else if (rule.operator === '=') isConditionMet = currentVal == rule.nilai;
+            if (targetTopic) {
+                // ====================================================
+                // 1. LOGIKA BARU: BATAS ATAS & BATAS BAWAH (HYSTERESIS)
+                // ====================================================
+                if (rule.batas_bawah !== null) {
+                    // Jika Sensor >= Batas Atas, dan Kipas masih OFF -> NYALAKAN
+                    if (currentVal >= rule.nilai && currentState !== perintahBersih) {
+                        console.log(`🎯 [OTOMASI] Menyentuh Batas Atas (${currentVal} >= ${rule.nilai}). Menyalakan ${aktuatorBersih}.`);
+                        mqttClient.publish(targetTopic, perintahBersih);
+                    } 
+                    // Jika Sensor <= Batas Bawah, dan Kipas masih ON -> MATIKAN
+                    else if (currentVal <= rule.batas_bawah && currentState === perintahBersih) {
+                        const perintahMatikan = perintahBersih === 'ON' ? 'OFF' : 'ON';
+                        console.log(`🎯 [OTOMASI] Menyentuh Batas Bawah (${currentVal} <= ${rule.batas_bawah}). Mematikan ${aktuatorBersih}.`);
+                        mqttClient.publish(targetTopic, perintahMatikan);
+                    }
+                } 
+                // ====================================================
+                // 2. LOGIKA LAMA (Hanya 1 Batas Statis)
+                // ====================================================
+                else {
+                    let isConditionMet = false;
+                    if (rule.operator === '<') isConditionMet = currentVal < rule.nilai;
+                    else if (rule.operator === '>') isConditionMet = currentVal > rule.nilai;
+                    else if (rule.operator === '=') isConditionMet = currentVal == rule.nilai;
 
-            if (isConditionMet) {
-                console.log(`🎯 [OTOMASI] Aturan Terpenuhi: ${rule.sensor} ${rule.operator} ${rule.nilai}`);
-                
-                // BERSIHKAN SPASI SILUMAN DARI DATABASE
-                const aktuatorBersih = rule.aktuator.trim();
-                const perintahBersih = rule.perintah.trim();
-                const targetTopic = TOPICS[aktuatorBersih];
-
-                // CEK DAN TEMBAKKAN PESAN
-                if (targetTopic) {
-                    console.log(`📡 [PUBLISH] Node.js menembakkan -> Topik: [${targetTopic}], Perintah: [${perintahBersih}]`);
-                    
-                    // Eksekusi tembakan ke HiveMQ
-                    mqttClient.publish(targetTopic, perintahBersih, (err) => {
-                        if (err) console.error(`❌ Gagal kirim ke MQTT:`, err);
-                    });
-                } else {
-                    console.log(`⚠️ [WARNING] Aktuator '${aktuatorBersih}' tidak ditemukan di daftar TOPICS Node.js!`);
+                    // Hanya kirim pesan jika kondisinya terpenuhi DAN alat belum menyala
+                    if (isConditionMet && currentState !== perintahBersih) {
+                        console.log(`🎯 [OTOMASI] Aturan Statis Terpenuhi: ${rule.sensor} ${rule.operator} ${rule.nilai}`);
+                        mqttClient.publish(targetTopic, perintahBersih);
+                    }
                 }
             }
         }
