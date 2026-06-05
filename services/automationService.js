@@ -32,12 +32,24 @@ async function checkAndTriggerIrrigation(sensorData, mqttClient) {
                     if (currentVal >= rule.nilai && currentState !== perintahBersih) {
                         console.log(`🎯 [OTOMASI] Menyentuh Batas Atas (${currentVal} >= ${rule.nilai}). Menyalakan ${aktuatorBersih}.`);
                         mqttClient.publish(targetTopic, perintahBersih);
+
+                        // KODE BARU: Catat riwayat hidup aktuator ke Supabase
+                        await supabase.from('otomasi_riwayat').insert({
+                            aktuator: aktuatorBersih,
+                            perintah: perintahBersih
+                        });
                     } 
                     // Jika Sensor <= Batas Bawah, dan Kipas masih ON -> MATIKAN
                     else if (currentVal <= rule.batas_bawah && currentState === perintahBersih) {
                         const perintahMatikan = perintahBersih === 'ON' ? 'OFF' : 'ON';
                         console.log(`🎯 [OTOMASI] Menyentuh Batas Bawah (${currentVal} <= ${rule.batas_bawah}). Mematikan ${aktuatorBersih}.`);
                         mqttClient.publish(targetTopic, perintahMatikan);
+
+                        // KODE BARU: Catat riwayat mati aktuator ke Supabase
+                        await supabase.from('otomasi_riwayat').insert({
+                            aktuator: aktuatorBersih,
+                            perintah: perintahMatikan
+                        });
                     }
                 } 
                 // ====================================================
@@ -53,6 +65,12 @@ async function checkAndTriggerIrrigation(sensorData, mqttClient) {
                     if (isConditionMet && currentState !== perintahBersih) {
                         console.log(`🎯 [OTOMASI] Aturan Statis Terpenuhi: ${rule.sensor} ${rule.operator} ${rule.nilai}`);
                         mqttClient.publish(targetTopic, perintahBersih);
+
+                        // KODE BARU: Catat riwayat untuk aturan statis ke Supabase
+                        await supabase.from('otomasi_riwayat').insert({
+                            aktuator: aktuatorBersih,
+                            perintah: perintahBersih
+                        });
                     }
                 }
             }
