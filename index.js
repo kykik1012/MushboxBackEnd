@@ -6,8 +6,21 @@ const apiRoutes = require('./routes/apiRoutes');
 const app = express();
 app.use(express.json());
 
-// Jalankan koneksi MQTT dan Automasi Sistem IoT[cite: 1]
+// Jalankan koneksi MQTT dan Automasi Sistem IoT
 mqttConfig.connect();
+
+// ====================================================
+// --- TAMBAHAN: RUTE HALAMAN UTAMA (WEB BROWSER) ---
+// ====================================================
+app.get('/', (req, res) => {
+    res.json({
+        app: "MushBox Backend System",
+        status: "Online 🟢",
+        waktu_server: new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }),
+        // Meminta data terbaru dari file mqtt.js
+        data_terkini: mqttConfig.getLatestData ? mqttConfig.getLatestData() : { pesan: "Menunggu data dari ESP32..." }
+    });
+});
 
 // Daftarkan rute API
 app.use('/api', apiRoutes);
