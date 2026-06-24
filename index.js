@@ -1,5 +1,19 @@
+require('dotenv').config();
+const express = require('express');
+const mqttConfig = require('./config/mqtt');
+const apiRoutes = require('./routes/apiRoutes');
+
+// ==========================================
+// 1. DEKLARASI APP (Tadi tidak sengaja terhapus)
+// ==========================================
+const app = express();
+app.use(express.json());
+
+// Jalankan koneksi MQTT dan Automasi Sistem IoT
+mqttConfig.connect();
+
 // ====================================================
-// --- LIVE MONITORING DASHBOARD (MUSHBOX THEME) ---
+// 2. LIVE MONITORING DASHBOARD (MUSHBOX THEME)
 // ====================================================
 app.get('/', (req, res) => {
     // Ambil data terbaru dari MQTT
@@ -10,7 +24,7 @@ app.get('/', (req, res) => {
     const hum = latestData && latestData.hum !== undefined ? latestData.hum : '--';
     const soil = latestData && latestData.soil !== undefined ? latestData.soil : '--';
     const co2 = latestData && latestData.co2 !== undefined ? latestData.co2 : '--';
-    const water = latestData && latestData.water ? latestData.water : 'MENUGGU...';
+    const water = latestData && latestData.water ? latestData.water : 'MENUNGGU...';
     const pump = latestData && latestData.pump ? latestData.pump.toUpperCase() : 'OFF';
     const fan = latestData && latestData.fan ? latestData.fan.toUpperCase() : 'OFF';
     
@@ -313,4 +327,13 @@ app.get('/', (req, res) => {
     </body>
     </html>
     `);
+});
+
+// Daftarkan rute API
+app.use('/api', apiRoutes);
+
+// Jalankan Server
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`🚀 [SERVER] Backend MushBox berjalan di port ${PORT}`);
 });
